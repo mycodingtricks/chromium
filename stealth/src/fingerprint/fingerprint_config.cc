@@ -12,6 +12,7 @@
 #include "base/no_destructor.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
+#include "base/strings/string_util.h"
 #include "base/values.h"
 
 namespace stealth {
@@ -46,6 +47,21 @@ FingerprintConfig::~FingerprintConfig() = default;
 // static
 FingerprintConfig& FingerprintConfig::Get() {
   static base::NoDestructor<FingerprintConfig> instance;
+  // Lazily ingest from THIS process's command line the first time the config is
+  // touched. The magic-static guarantees the lambda runs exactly once and is
+  // thread-safe, so the first reader (which may be a worker thread in a
+  // renderer) establishes the values for all subsequent readers across threads.
+  // In the browser this is a no-op because CreateBrowserMainParts already
+  // initialized explicitly+early; in every child process this is the sole
+  // ingestion point, reading the resolved --stealth-* scalars the browser
+  // forwarded via AppendChildSwitches. It reads only scalars (no
+  // --stealth-profile is ever forwarded), so no sandboxed file access occurs.
+  static const bool lazy_init = [&] {
+    instance->InitializeFromCommandLine(
+        *base::CommandLine::ForCurrentProcess());
+    return true;
+  }();
+  (void)lazy_init;
   return *instance;
 }
 
@@ -56,9 +72,12 @@ bool FingerprintConfig::InitializeFromJson(const std::string& json) {
   const base::Value::Dict& root = parsed->GetDict();
 
   // seed -> deterministic noise. We hash the string seed into a u64 so the
-  // launcher can pass a human-readable UUID.
-  if (const std::string* seed = root.FindString("seed"))
+  // launcher can pass a human-readable UUID. Retain the raw string so we can
+  // forward it verbatim to child processes (see AppendChildSwitches).
+  if (const std::string* seed = root.FindString("seed")) {
+    seed_string_ = *seed;
     noise_seed_ = HashSeed(*seed);
+  }
 
   if (const base::Value::Dict* nav = root.FindDict("navigator")) {
     user_agent_ = GetString(*nav, "userAgent");
@@ -106,6 +125,13 @@ bool FingerprintConfig::InitializeFromJson(const std::string& json) {
 
 bool FingerprintConfig::InitializeFromCommandLine(
     const base::CommandLine& command_line) {
+  // Idempotent: the browser inits explicitly in CreateBrowserMainParts and
+  // Get() also inits lazily; whichever runs first wins and the other is a
+  // cheap no-op. Prevents double-parsing and keeps the result stable.
+  if (initialized_)
+    return active_;
+  initialized_ = true;
+
   bool loaded = false;
 
   // 1) Full profile JSON (file or inline), if supplied. Sets the baseline.
@@ -238,14 +264,88 @@ bool FingerprintConfig::ApplyCommandLineScalars(
   }
 
   if (command_line.HasSwitch(kStealthSeedSwitch)) {
-    noise_seed_ =
-        HashSeed(command_line.GetSwitchValueASCII(kStealthSeedSwitch));
+    const std::string seed = command_line.GetSwitchValueASCII(kStealthSeedSwitch);
+    seed_string_ = seed;
+    noise_seed_ = HashSeed(seed);
+    applied = true;
+  }
+
+  // Valueless noise toggles (presence => enabled). Forwarded to children so
+  // worker-scope noise surfaces match the window.
+  if (command_line.HasSwitch(kStealthCanvasNoiseSwitch)) {
+    canvas_noise_ = true;
+    applied = true;
+  }
+  if (command_line.HasSwitch(kStealthAudioNoiseSwitch)) {
+    audio_noise_ = true;
+    applied = true;
+  }
+  if (command_line.HasSwitch(kStealthWebglNoiseSwitch)) {
+    webgl_noise_ = true;
     applied = true;
   }
 
   if (applied)
     active_ = true;
   return applied;
+}
+
+void FingerprintConfig::AppendChildSwitches(
+    base::CommandLine* command_line) const {
+  if (!active_)
+    return;
+
+  auto put = [&](const char* sw, const std::optional<std::string>& v) {
+    if (v)
+      command_line->AppendSwitchASCII(sw, *v);
+  };
+
+  // --- navigator ---
+  put(kStealthUaSwitch, user_agent_);
+  put(kStealthPlatformSwitch, platform_);
+  put(kStealthLanguageSwitch, language_);
+  put(kStealthWebglVendorSwitch, webgl_vendor_);
+  put(kStealthWebglRendererSwitch, webgl_renderer_);
+  if (languages_) {
+    command_line->AppendSwitchASCII(
+        kStealthLanguagesSwitch,
+        base::JoinString(*languages_, ","));
+  }
+  if (hw_concurrency_) {
+    command_line->AppendSwitchASCII(kStealthHardwareConcurrencySwitch,
+                                    base::NumberToString(*hw_concurrency_));
+  }
+  if (device_memory_) {
+    command_line->AppendSwitchASCII(kStealthDeviceMemorySwitch,
+                                    base::NumberToString(*device_memory_));
+  }
+  if (max_touch_points_) {
+    command_line->AppendSwitchASCII(kStealthMaxTouchPointsSwitch,
+                                    base::NumberToString(*max_touch_points_));
+  }
+
+  // --- screen --- forward as WIDTHxHEIGHT (+ color depth separately).
+  if (screen_width_ && screen_height_) {
+    command_line->AppendSwitchASCII(
+        kStealthScreenSwitch,
+        base::NumberToString(*screen_width_) + "x" +
+            base::NumberToString(*screen_height_));
+  }
+  if (color_depth_) {
+    command_line->AppendSwitchASCII(kStealthColorDepthSwitch,
+                                    base::NumberToString(*color_depth_));
+  }
+
+  // --- noise seed (forward the raw string; the child re-hashes identically) ---
+  put(kStealthSeedSwitch, seed_string_);
+
+  // --- noise toggles (valueless) ---
+  if (canvas_noise_)
+    command_line->AppendSwitch(kStealthCanvasNoiseSwitch);
+  if (audio_noise_)
+    command_line->AppendSwitch(kStealthAudioNoiseSwitch);
+  if (webgl_noise_)
+    command_line->AppendSwitch(kStealthWebglNoiseSwitch);
 }
 
 }  // namespace stealth

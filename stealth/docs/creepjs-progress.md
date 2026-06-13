@@ -141,14 +141,48 @@ and enforces consistency — it never invents identities.
 
 ## P0 — Consistency backbone (do these first; everything else depends on parity)
 
-- [ ] **Worker-scope parity** `TODO` — the single most important task. Every value
-  below that is readable in a worker MUST be identical in window, Dedicated,
-  Shared, and Service worker scopes. Verify the command-line/Mojo forwarding in
-  `chrome_content_browser_client.cc::AppendExtraCommandLineSwitches` reaches
-  *worker and service-worker* render processes, not just the main frame.
-  Cross-checked by CreepJS: `userAgent`, `platform`, `hardwareConcurrency`,
-  `deviceMemory`, `language`/`languages`, timezone, Intl locale, JS engine,
-  `userAgentData`, WebGL VENDOR/RENDERER, `Function.toString` integrity.
+- [x] **Worker-scope parity** `DONE` — the browser→child forwarding channel is
+  now built so every scalar the orchestrator resolved reaches EVERY child
+  process identically. Two halves:
+  - **Forward (browser side):** `FingerprintConfig::AppendChildSwitches` emits
+    the resolved identity as discrete `--stealth-*` scalars, called from
+    `ChromeContentBrowserClient::AppendExtraCommandLineSwitches` *unconditionally
+    for all child process types* (placed right after `browser_command_line` is
+    computed, before the renderer-only branch). Renderer processes host the
+    window AND all dedicated/shared/service worker scopes, so one renderer-side
+    forward covers every worker type; the GPU process (WebGL vendor/renderer)
+    and utility processes receive it too. We forward only scalars — never
+    `--stealth-profile` — so sandboxed children never attempt a file read. The
+    noise seed is forwarded as the **raw seed string** (new retained
+    `seed_string_`), not the hashed u64, so the child re-hashes via `HashSeed`
+    to the identical `noise_seed_`. Added valueless noise-toggle switches
+    (`--stealth-{canvas,audio,webgl}-noise`) so worker noise surfaces match.
+  - **Ingest (child side):** `FingerprintConfig::Get()` now lazily ingests from
+    the current process's command line on first touch via a thread-safe
+    magic-static — the sole ingestion point in child processes (no upstream
+    renderer-startup patch needed). `InitializeFromCommandLine` is idempotent
+    (`initialized_` guard) so the browser's explicit early init and the lazy
+    path never double-parse. The magic-static establishes a happens-before for
+    worker threads that read the config after the first (main-thread) touch.
+  - CreepJS surface: window↔Dedicated/Shared/Service-worker parity of
+    `userAgent`, `platform`, `hardwareConcurrency`, `deviceMemory`,
+    `language`/`languages`, WebGL VENDOR/RENDERER, seed-derived noise (a
+    mismatch in any = a "lie"). Not yet directly observable until the per-surface
+    navigator/screen/webgl Blink getter hooks land and read this config (next
+    P1 tasks); this task delivers the transport they all depend on.
+  - Upstream patch point: `ChromeContentBrowserClient::AppendExtraCommandLineSwitches`
+    (forwarding) — symbol, not line.
+  - stealth/src file: `stealth/src/fingerprint/fingerprint_config.{h,cc}`
+    (`AppendChildSwitches`, lazy `Get()`, idempotent `InitializeFromCommandLine`,
+    `seed_string_`, `kStealth{Canvas,Audio,Webgl}NoiseSwitch`).
+  - Mechanism: hook (browser forward) + flag (resolved `--stealth-*` scalars as
+    the per-child transport).
+  - Last observed CreepJS result: not yet built — depot_tools not on PATH and no
+    `out/` dir; clean build is multi-hour. Validated offline with a standalone
+    round-trip harness: forward→re-ingest reproduces every field identically,
+    incl. the `noise_seed` u64 (via the retained seed string), and an inactive
+    config forwards nothing (stock fallthrough). Verify window↔worker parity in
+    DevTools once the first navigator getter hook makes a value observable.
 - [ ] **Single profile source of truth** `TODO` — confirm every surface derives
   from the one profile JSON in `stealth/src/fingerprint/`; no surface computes a
   shared fact independently.
@@ -333,6 +367,26 @@ and enforces consistency — it never invents identities.
 
 ## Change log (append newest at top)
 
+- _2026-06-13_ — **DONE: Worker-scope parity (the browser→child forwarding
+  channel).** Built both halves of the transport every future surface depends
+  on. Browser side: `FingerprintConfig::AppendChildSwitches` re-emits the
+  resolved identity as `--stealth-*` scalars, hooked into
+  `ChromeContentBrowserClient::AppendExtraCommandLineSwitches` for ALL child
+  process types (renderers host every worker scope; GPU/utility covered too).
+  Only scalars are forwarded (never `--stealth-profile`), so sandboxed children
+  never read a file; the noise seed is forwarded as the raw string (new
+  `seed_string_`) so the child re-hashes to the identical `noise_seed_`. Added
+  valueless `--stealth-{canvas,audio,webgl}-noise` toggles for worker noise
+  parity. Child side: `Get()` lazily + thread-safely (magic-static) ingests from
+  the current process command line — the sole child ingestion point, no
+  renderer-startup patch — and `InitializeFromCommandLine` is now idempotent
+  (`initialized_`) so the browser's explicit early init and the lazy path don't
+  double-parse. 1 upstream patch refreshed
+  (`chrome_content_browser_client.cc`); all logic net-new in
+  `stealth/src/fingerprint/`. Validated offline: forward→re-ingest round-trips
+  every field identically incl. the `noise_seed` u64; inactive config forwards
+  nothing. Not yet CreepJS-observable (awaits the P1 navigator/screen/webgl
+  getter hooks that consume this config).
 - _2026-06-13_ — **DONE: Noise seed from args.** Seed ingestion was already
   complete (both channels → `noise_seed_` via `HashSeed`); this adds the single
   derivation point `stealth::SeededNoise` (`stealth/src/fingerprint/seeded_noise.

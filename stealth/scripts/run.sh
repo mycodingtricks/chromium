@@ -100,6 +100,16 @@ cd "$REPO_DIR"
 # first committed iteration and each iteration adds a detailed comment.
 PR_NUMBER=""
 BASE_BRANCH="${BASE_BRANCH:-$(git rev-parse --abbrev-ref HEAD)}"
+# Never use an ephemeral per-run branch (a leftover checkout from a previous
+# loop) as the PR base — those aren't guaranteed to exist on origin, so
+# `gh pr create` fails with "Base sha can't be blank". Fall back to the trunk.
+case "$BASE_BRANCH" in
+  "$WORK_BRANCH" | stealth/creepjs-run-* | HEAD)
+    BASE_BRANCH="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
+    BASE_BRANCH="${BASE_BRANCH:-main}"
+    echo "ℹ️  HEAD is a run branch; using '$BASE_BRANCH' as PR base instead." >&2
+    ;;
+esac
 
 if [ "$ENABLE_GIT" = "1" ]; then
   if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -154,6 +164,13 @@ publish_iteration() {
     "$iter" "${summary:-_(no summary captured)_}" "$changed" "$(git rev-parse --short HEAD)" "$log")"
 
   if [ -z "$PR_NUMBER" ]; then
+    # The base ref must exist on origin or GitHub rejects the PR ("Base sha
+    # can't be blank"). Push it if the remote doesn't have it yet.
+    if ! git ls-remote --exit-code --heads origin "$BASE_BRANCH" >/dev/null 2>&1; then
+      echo "ℹ️  base '$BASE_BRANCH' missing on origin — pushing it." >&2
+      git push origin "$BASE_BRANCH" >/dev/null 2>&1 \
+        || echo "⚠️  could not push base branch '$BASE_BRANCH' to origin." >&2
+    fi
     local url
     if url="$(gh pr create --base "$BASE_BRANCH" --head "$WORK_BRANCH" \
         --title "stealth: CreepJS-evasion automated run ($RUN_TS)" \
