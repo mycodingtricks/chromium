@@ -2854,6 +2854,13 @@ void ChromeContentBrowserClient::AppendExtraCommandLineSwitches(
   const base::CommandLine& browser_command_line =
       *base::CommandLine::ForCurrentProcess();
 
+  // [stealth] Worker-scope parity: forward the resolved fingerprint identity to
+  // EVERY child process (renderers — which host the window plus all dedicated/
+  // shared/service worker scopes — the GPU process, and utility processes) as
+  // discrete --stealth-* scalars. The browser ingested the profile once; a
+  // value it set but a child missed would be a CreepJS window<->worker lie.
+  stealth::FingerprintConfig::Get().AppendChildSwitches(command_line);
+
   static const char* const kCommonSwitchNames[] = {
       embedder_support::kUserAgent,
       switches::kUserDataDir,  // Make logs go to the right file.

@@ -62,6 +62,15 @@ inline constexpr char kStealthWebglRendererSwitch[] = "stealth-webgl-renderer";
 // passed via either channel yields the same deterministic noise.
 inline constexpr char kStealthSeedSwitch[] = "stealth-seed";
 
+// Noise toggles. Valueless (presence => enabled). They originate from the
+// profile JSON (canvas/audio/webgl ".noise" booleans); there is no separate
+// "fast path" for them, but they ARE part of the browser->child forwarding
+// channel (AppendChildSwitches) so worker-scope noise surfaces (OffscreenCanvas
+// / WebGL in workers) stay identical to the window.
+inline constexpr char kStealthCanvasNoiseSwitch[] = "stealth-canvas-noise";
+inline constexpr char kStealthAudioNoiseSwitch[] = "stealth-audio-noise";
+inline constexpr char kStealthWebglNoiseSwitch[] = "stealth-webgl-noise";
+
 // All getters return std::nullopt when the profile does not override that
 // surface, so the hook falls through to stock Chromium behaviour:
 //
@@ -86,6 +95,17 @@ class FingerprintConfig {
   // NOT call this — they are sandboxed and cannot read the file; the browser
   // forwards values to them (see AppendExtraCommandLineSwitches).
   bool InitializeFromCommandLine(const base::CommandLine& command_line);
+
+  // Worker-scope parity: forward this (already-resolved) identity onto a child
+  // process's command line as discrete --stealth-* scalars. Called by the
+  // browser's AppendExtraCommandLineSwitches hook for EVERY child process so
+  // that the window, every worker scope (dedicated/shared/service — all hosted
+  // in renderer processes), the GPU process (WebGL vendor/renderer) and utility
+  // processes all read one coherent identity. Children never read the profile
+  // file; they receive only these scalars (no --stealth-profile, so no
+  // sandboxed file access is attempted). No-op when the config is inactive. A
+  // value the browser set but a child missed would surface as a CreepJS lie.
+  void AppendChildSwitches(base::CommandLine* command_line) const;
 
   // True once a non-empty profile has been loaded.
   bool active() const { return active_; }
@@ -125,8 +145,19 @@ class FingerprintConfig {
   // Returns true if at least one recognised switch was applied.
   bool ApplyCommandLineScalars(const base::CommandLine& command_line);
 
+  // Guards InitializeFromCommandLine against running twice. The browser inits
+  // explicitly+early in CreateBrowserMainParts; Get() also inits lazily on
+  // first touch (the sole ingestion point in child processes). Idempotent so
+  // the two paths never double-parse.
+  bool initialized_ = false;
   bool active_ = false;
   std::optional<uint64_t> noise_seed_;
+  // The raw seed string as supplied by the orchestrator (JSON "seed" or
+  // --stealth-seed), retained so AppendChildSwitches can forward the SAME
+  // string to children; they re-hash it via HashSeed to the identical u64
+  // noise_seed_. (We cannot forward the hashed u64, as the child would hash it
+  // again and diverge.)
+  std::optional<std::string> seed_string_;
 
   std::optional<std::string> user_agent_;
   std::optional<std::string> platform_;
