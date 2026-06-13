@@ -1406,6 +1406,8 @@ source_set("browser") {
     "media/capture/desktop_streams_registry_impl.h",
     "network/declarative_performance_observer.cc",
     "network/declarative_performance_observer.h",
+    "network/declarative_performance_observer_coordinator.cc",
+    "network/declarative_performance_observer_coordinator.h",
     "permissions/permission_descriptor_util.cc",
     "web_contents_based_canceller.cc",
     "web_contents_based_canceller.h",

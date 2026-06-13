@@ -119,6 +119,7 @@
 #include "content/browser/media/webaudio/audio_context_manager_impl.h"
 #include "content/browser/navigation_or_document_handle.h"
 #include "content/browser/network/cross_origin_embedder_policy_reporter.h"
+#include "content/browser/network/declarative_performance_observer.h"
 #include "content/browser/permissions/permission_controller_impl.h"
 #include "content/browser/permissions/permission_service_context.h"
 #include "content/browser/permissions/permission_util.h"
@@ -16593,6 +16594,17 @@ void RenderFrameHostImpl::TakeNewDocumentPropertiesFromNavigation(
   }
   RuntimeFeatureStateDocumentData::CreateForCurrentDocument(
       this, navigation_request->GetRuntimeFeatureStateContext());
+
+  // Create DeclarativePerformanceObserver for all main frames, including
+  // prerendered ones, but excluding Fenced Frames or embedded outer documents.
+  if (!GetParentOrOuterDocument()) {
+    const network::mojom::DeclarativePerformanceObserverPolicy* policy =
+        navigation_request->GetDeclarativePerformanceObserverPolicy();
+    if (policy && policy->reporting_endpoint && !policy->entry_types.empty()) {
+      DeclarativePerformanceObserver::CreateForCurrentDocument(
+          this, navigation_request);
+    }
+  }
 
   // TODO(crbug.com/40092527): Once we are able to compute the origin to
   // commit in the browser, `navigation_request->commit_params().storage_key`

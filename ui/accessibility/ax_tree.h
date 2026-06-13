@@ -17,7 +17,6 @@
 #include "base/dcheck_is_on.h"
 #include "base/debug/crash_logging.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "third_party/abseil-cpp/absl/container/flat_hash_map.h"
 #include "third_party/abseil-cpp/absl/container/flat_hash_set.h"
@@ -136,8 +135,6 @@ class AX_EXPORT AXTree {
   AXTree();
   explicit AXTree(const AXTreeUpdate& initial_state);
   virtual ~AXTree();
-
-  base::WeakPtr<AXTree> GetWeakPtr();
 
   // AXTree owns pointers so copying is non-trivial.
   AXTree(const AXTree&) = delete;
@@ -554,8 +551,6 @@ class AX_EXPORT AXTree {
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
   std::unique_ptr<ExtraAnnouncementNodes> extra_announcement_nodes_ = nullptr;
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
-
-  base::WeakPtrFactory<AXTree> weak_ptr_factory_{this};
 };
 
 // Sets the flag that indicates whether the accessibility tree is currently

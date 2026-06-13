@@ -342,6 +342,20 @@ BASE_FEATURE(kLateGraphiteFeatureCheck,
 // --disable-skia-graphite-precompilation.
 BASE_FEATURE(kSkiaGraphitePrecompilation, base::FEATURE_DISABLED_BY_DEFAULT);
 
+// Whether to use PersistentCache for Skia Graphite's pipeline cache.
+BASE_FEATURE(kSkiaGraphiteUsePersistentCache,
+             "SkiaGraphiteUsePersistentCache",
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_WIN)
+             base::FEATURE_ENABLED_BY_DEFAULT
+#else
+             base::FEATURE_DISABLED_BY_DEFAULT
+#endif
+);
+
+bool SkiaGraphiteUsesPersistentCache() {
+  return base::FeatureList::IsEnabled(kSkiaGraphiteUsePersistentCache);
+}
+
 BASE_FEATURE(kConditionallySkipGpuChannelFlush,
 // To enable on ChromeOS, test failures must be investigated
 // (crrev.com/c/5435673).
@@ -369,13 +383,6 @@ const base::FeatureParam<bool> kSkiaGraphiteDawnBackendDebugLabels{
 // Enables automatic buffer mappings in Dawn's backend.
 const base::FeatureParam<bool> kSkiaGraphiteDawnEnableAutoMap{
     &kSkiaGraphite, "dawn_enable_auto_map", true};
-
-// Whether to use PersistentCache for Dawn's pipeline cache.
-BASE_FEATURE_PARAM(bool,
-                   kSkiaGraphiteDawnUsePersistentCache,
-                   &kSkiaGraphite,
-                   "dawn_use_persistent_cache",
-                   BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_WIN));
 
 const base::FeatureParam<int> kSkiaGraphiteMaxPendingRecordings{
     &kSkiaGraphite, "max_pending_recordings", 100};

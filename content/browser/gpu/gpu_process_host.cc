@@ -561,7 +561,7 @@ void BindDiscardableMemoryReceiverOnUI(
 // src/content/browser/browser_main_loop.cc once the persistent cache is used
 // for all cache types.
 void InitGpuPersistentCacheFileFactoryOnce() {
-  if ((features::kSkiaGraphiteDawnUsePersistentCache.Get() ||
+  if ((features::SkiaGraphiteUsesPersistentCache() ||
        base::FeatureList::IsEnabled(features::kGpuPersistentCache)) &&
       !viz::PersistentCacheSandboxedFileFactory::GetInstance()) {
     base::FilePath cache_root_dir =
