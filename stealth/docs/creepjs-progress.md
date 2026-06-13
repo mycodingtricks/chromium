@@ -108,9 +108,36 @@ and enforces consistency — it never invents identities.
     Last observed CreepJS result: not yet observable (no surface hooks; same
     build gate as the ingestion tasks — depot_tools/`out/` absent, multi-hour
     clean build).
-- [ ] **Noise seed from args** `TODO` — `seed` / `--stealth-seed` drives all
-  seeded noise (canvas/audio/WebGL/DOMRect) so a given identity is stable across
-  launches and distinct across identities.
+- [x] **Noise seed from args** `DONE` — `seed` / `--stealth-seed` is ingested
+  once (FNV-1a `HashSeed` → `noise_seed_`, exposed via `NoiseSeed()`; both the
+  JSON `seed` field and the `--stealth-seed` switch land on the same u64 — see the
+  two earlier P0 ingestion items). This item adds the **single derivation point**
+  that turns that one seed into per-surface deterministic streams so every noise
+  surface (canvas/audio/WebGL/DOMRect/SVG) branches off the *same* profile seed
+  instead of inventing its own entropy: net-new `stealth::SeededNoise`.
+  `SeededNoise::ForSurface("<domain>")` reads `FingerprintConfig::Get().NoiseSeed()`
+  and returns `std::nullopt` when no seed is set (→ surface falls through to stock
+  Chromium), or a `splitmix64` stream seeded by `base_seed ^ FNV1a(domain)`. This
+  is the sanctioned entry point future noise tasks must use. Verified offline
+  (standalone harness): same (seed,domain) ⇒ identical stream; different
+  domain/seed ⇒ decorrelated; `NextDouble()∈[0,1)`, `NextJitter(m)∈[-m,m]`,
+  `NextIntDelta(b)∈[-b,b]`. No launch-time entropy (no Date/RNG); same args ⇒ same
+  noise across launches, distinct across identities.
+  - CreepJS surface: n/a directly (noise primitive; observable only once canvas/
+    audio/webgl/domrect surface hooks consume it).
+  - Upstream patch point: none — fully net-new in `stealth/src/`; only edit is the
+    `source_set("fingerprint")` `sources` list in `stealth/src/BUILD.gn` (our own
+    target, not upstream).
+  - stealth/src file: `stealth/src/fingerprint/seeded_noise.{h,cc}` (reads
+    `fingerprint_config.h::NoiseSeed`).
+  - Mechanism: noise (deterministic seeded PRNG; one seed → many per-surface
+    streams). Carry-forward rule: noise surfaces MUST call
+    `SeededNoise::ForSurface(domain)` and skip noise on `nullopt`; never seed from
+    any other source.
+  - Last observed CreepJS result: not yet built — depot_tools not on PATH and no
+    `out/` dir; clean build is multi-hour. Logic validated offline. Verify hashes
+    are stable-per-profile / distinct-across-profiles once the first noise surface
+    hook (canvas) consumes this stream.
 
 ## P0 — Consistency backbone (do these first; everything else depends on parity)
 
@@ -306,6 +333,16 @@ and enforces consistency — it never invents identities.
 
 ## Change log (append newest at top)
 
+- _2026-06-13_ — **DONE: Noise seed from args.** Seed ingestion was already
+  complete (both channels → `noise_seed_` via `HashSeed`); this adds the single
+  derivation point `stealth::SeededNoise` (`stealth/src/fingerprint/seeded_noise.
+  {h,cc}`) so all seeded-noise surfaces branch off the one profile seed via
+  `SeededNoise::ForSurface("<domain>")` (returns `nullopt` ⇒ stock when no seed).
+  splitmix64 stream keyed by `seed ^ FNV1a(domain)`. Wired into
+  `source_set("fingerprint")` in `stealth/src/BUILD.gn` (our target — no upstream
+  edit, no patch refresh). Validated offline: determinism, per-domain/seed
+  decorrelation, and `NextDouble`/`NextJitter`/`NextIntDelta` ranges all hold.
+  Not yet CreepJS-observable (awaits a noise surface hook to consume it).
 - _2026-06-13_ — **DONE: Orchestrator owns values; browser enforces (audit).**
   Audited the whole net-new tree: 0 randomness sources, 0 hardcoded identities,
   every identity getter defaults to `std::nullopt` (absent⇒stock), parsing fully

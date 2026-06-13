@@ -10,6 +10,8 @@ source_set("fingerprint") {
   sources = [
     "fingerprint/fingerprint_config.cc",
     "fingerprint/fingerprint_config.h",
+    "fingerprint/seeded_noise.cc",
+    "fingerprint/seeded_noise.h",
   ]
 
   deps = [
