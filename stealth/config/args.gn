@@ -1,0 +1,25 @@
+# GN build args for the stealth browser. Copied into out/Stealth/args.gn by
+# stealth/scripts/build.sh. Tune for your machine/release needs.
+
+# --- Release-ish, fast iteration ---
+is_debug = false
+is_component_build = true        # faster incremental links during dev
+symbol_level = 1                 # 0 for fastest builds, 2 for full debugging
+blink_symbol_level = 0
+
+# --- Strip Google-specific bits (we ship our own brand) ---
+is_official_build = false
+enable_nacl = false
+proprietary_codecs = true        # H.264/AAC — needed to look like real Chrome
+ffmpeg_branding = "Chrome"
+
+# --- Keep it Chrome-shaped for fingerprint realism ---
+# (do NOT set is_chrome_branded unless you have the internal src-internal repo)
+
+# --- Targeting (uncomment for your platform) ---
+# target_cpu = "arm64"           # Apple Silicon
+# target_cpu = "x64"
+
+# --- Stealth layer ---
+# Our src/ is wired into the build via stealth/src/BUILD.gn; no arg needed,
+# but keep custom feature toggles here if you add any.

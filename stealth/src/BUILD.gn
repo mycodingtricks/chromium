@@ -1,0 +1,26 @@
+# Build rules for the stealth layer. To wire this into the browser, add a
+# dependency from a top-level target onto "//stealth/src:fingerprint". The
+# cleanest single hook is in the root //BUILD.gn or the relevant
+# chrome/content target's deps — record that one-line edit as a patch.
+#
+# Keeping our code in its own GN target means upstream BUILD.gn files stay
+# almost untouched (one `deps +=` line), which is rebase-friendly.
+
+source_set("fingerprint") {
+  sources = [
+    "fingerprint/fingerprint_config.cc",
+    "fingerprint/fingerprint_config.h",
+  ]
+
+  deps = [
+    "//base",
+  ]
+
+  # Allow includes of the form "stealth/src/...".
+  # (repo root is already an include dir in Chromium's GN config.)
+}
+
+# Convenience umbrella target.
+group("stealth") {
+  public_deps = [ ":fingerprint" ]
+}

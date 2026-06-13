@@ -1,0 +1,25 @@
+diff --git a/chrome/browser/chrome_content_browser_client.cc b/chrome/browser/chrome_content_browser_client.cc
+index 2196b267d4..74d33286bc 100644
+--- a/chrome/browser/chrome_content_browser_client.cc
++++ b/chrome/browser/chrome_content_browser_client.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/chrome_content_browser_client.h"
+ 
++#include "stealth/src/fingerprint/fingerprint_config.h"  // [stealth]
++
+ #include <algorithm>
+ #include <iterator>
+ #include <map>
+@@ -1721,6 +1723,11 @@ void ChromeContentBrowserClient::MaybeProxyNetworkBoundRequest(
+ 
+ std::unique_ptr<content::BrowserMainParts>
+ ChromeContentBrowserClient::CreateBrowserMainParts(bool is_integration_test) {
++  // [stealth] Ingest the orchestrator-supplied fingerprint profile exactly once
++  // in the browser process (file path or inline JSON). Child processes receive
++  // the values via forwarded switches, not by reading the file themselves.
++  stealth::FingerprintConfig::Get().InitializeFromCommandLine(
++      *base::CommandLine::ForCurrentProcess());
+   return ChromeBrowserMainParts::Create(
+       is_integration_test, &startup_data_,
+       base::BindOnce(&ChromeContentBrowserClient::InitOnUIThread,

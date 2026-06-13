@@ -1,0 +1,6 @@
+# Upstream files (outside stealth/) that we patch.
+# One repo-relative path per line. Managed by scripts/track_file.sh.
+# refresh_patches.py reads this list to know which files to diff.
+# Keep this list as SHORT as possible — every entry is a future merge conflict.
+chrome/browser/chrome_content_browser_client.cc
+chrome/browser/BUILD.gn

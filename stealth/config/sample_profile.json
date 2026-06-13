@@ -1,0 +1,56 @@
+{
+  "_comment": "Sample stealth fingerprint profile. Pass with --stealth-profile=<path>. Every field is optional; omitted fields fall through to stock Chromium behaviour. Values here describe a generic Windows 11 / Intel desktop identity — keep all surfaces mutually CONSISTENT (see docs/fingerprint-surfaces.md).",
+
+  "seed": "a3f1c0de-2b44-4e7a-9c11-7f0e2d6b8a91",
+
+  "navigator": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+    "platform": "Win32",
+    "language": "en-US",
+    "languages": ["en-US", "en"],
+    "hardwareConcurrency": 8,
+    "deviceMemory": 8,
+    "maxTouchPoints": 0,
+    "uaData": {
+      "platform": "Windows",
+      "platformVersion": "15.0.0",
+      "mobile": false,
+      "architecture": "x86",
+      "bitness": "64"
+    }
+  },
+
+  "screen": {
+    "width": 1920,
+    "height": 1080,
+    "availWidth": 1920,
+    "availHeight": 1032,
+    "colorDepth": 24,
+    "pixelDepth": 24,
+    "devicePixelRatio": 1.0
+  },
+
+  "webgl": {
+    "unmaskedVendor": "Google Inc. (Intel)",
+    "unmaskedRenderer": "ANGLE (Intel, Intel(R) UHD Graphics 770 (0x00004680) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "noise": true
+  },
+
+  "canvas": { "noise": true },
+  "audio":  { "noise": true },
+
+  "fonts": {
+    "mode": "whitelist",
+    "list": ["Arial", "Calibri", "Cambria", "Consolas", "Segoe UI", "Times New Roman", "Verdana"]
+  },
+
+  "webrtc": {
+    "ipHandlingPolicy": "disable_non_proxied_udp",
+    "publicIp": null
+  },
+
+  "timezone": "America/New_York",
+  "geolocation": { "latitude": 40.7128, "longitude": -74.0060, "accuracy": 100 },
+
+  "_consistency_note": "platform Win32 ⇄ UA 'Windows NT 10.0' ⇄ uaData.platform 'Windows' ⇄ font set ⇄ WebGL D3D11 renderer ⇄ timezone America/New_York ⇄ geo NYC ⇄ language en-US. Change one, change all."
+}

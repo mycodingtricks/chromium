@@ -1,0 +1,12 @@
+diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
+index 0cca40181c..b86f709a42 100644
+--- a/chrome/browser/BUILD.gn
++++ b/chrome/browser/BUILD.gn
+@@ -642,6 +642,7 @@ source_set("core") {
+   }
+ 
+   deps = [
++    "//stealth/src:fingerprint",  # [stealth]
+     ":active_use_util",
+     ":after_startup_task_utils",
+     ":bad_message",
